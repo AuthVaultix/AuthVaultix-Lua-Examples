@@ -1,40 +1,44 @@
--- Import the AuthVaultix module
 local AuthVaultix = require("authvaultix_windows")
 
-local name = "Teamdeveloperxd"
-local ownerid = "5d36476ca4"
-local secret = "4e1d8a87787f8af61c5462d12ee16e1f06d53fe314c78e985571db65f0007178"
-local version = "1.0"
+local app = AuthVaultix.new(
+    "", -- name of application
+    "", -- owner id
+    "", -- secret
+    "" -- version
+)
 
+print("Connecting...")
+app:Init()
 
+while true do
+    print("\n[1] Login\n[2] Register\n[3] License Login\n[4] Upgrade\n[5] Forgot Password\n[6] Exit")
+    io.write("Choose option: ")
+    local choice = io.read()
 
--- Initialize API with your config
-AuthVaultix.Api(name, ownerid, secret, version)
-
--- Start initialization
-AuthVaultix.Init()
-
--- CLI Menu
-print("\n[1] Login\n[2] Register\n[3] License Login\n[4] Exit")
-io.write("Choose option: ")
-local choice = io.read()
-
--- Menu handler
-if choice == "1" then
-    io.write("Username: ") local username = io.read()
-    io.write("Password: ") local password = io.read()
-    AuthVaultix.Login(username, password)
-
-elseif choice == "2" then
-    io.write("Username: ") local username = io.read()
-    io.write("Password: ") local password = io.read()
-    io.write("License: ") local license = io.read()
-    AuthVaultix.Register(username, password, license)
-
-elseif choice == "3" then
-    io.write("License: ") local license = io.read()
-    AuthVaultix.License(license)
-
-else
-    print("Goodbye!")
+    if choice == "1" then
+        io.write("Username: ") local u = io.read()
+        io.write("Password: ") local p = io.read()
+        app:Login(u, p)
+    elseif choice == "2" then
+        io.write("Username: ") local u = io.read()
+        io.write("Password: ") local p = io.read()
+        io.write("License: ") local l = io.read()
+        app:Register(u, p, l, "")
+    elseif choice == "3" then
+        io.write("License: ") local l = io.read()
+        app:LicenseLogin(l)
+    elseif choice == "4" then
+        io.write("Username: ") local u = io.read()
+        io.write("License: ") local l = io.read()
+        app:Upgrade(u, l)
+    elseif choice == "5" then
+        io.write("Username: ") local u = io.read()
+        io.write("Email: ") local e = io.read()
+        app:ForgotPassword(u, e)
+    elseif choice == "6" then
+        print("Goodbye!")
+        break
+    else
+        print("Invalid option!")
+    end
 end
