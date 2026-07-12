@@ -36,6 +36,118 @@ function PayloadBuilder:compile()
     return string.sub(str, 1, -2)
 end
 
+local SystemInfoCollector = {}
+
+local function exec_cmd(cmd)
+    local file = io.popen(cmd)
+    if not file then return nil end
+    local output = file:read("*a")
+    file:close()
+    if output then
+        return string.gsub(output, "^%s*(.-)%s*$", "%1")
+    end
+    return nil
+end
+
+local function get_os_type()
+    local os_env = os.getenv("OS")
+    if os_env and string.find(string.lower(os_env), "windows") then
+        return "windows"
+    end
+    local path_env = os.getenv("PATH")
+    if path_env and string.find(path_env, ";") then
+        return "windows"
+    end
+    return "linux"
+end
+
+function SystemInfoCollector.get_os_version()
+    local ostype = get_os_type()
+    if ostype == "windows" then
+        local caption = exec_cmd('powershell -Command "(Get-CimInstance Win32_OperatingSystem).Caption"')
+        if caption and string.find(caption, "Microsoft ") == 1 then
+            caption = string.sub(caption, 11)
+        end
+        local version = exec_cmd('powershell -Command "(Get-CimInstance Win32_OperatingSystem).Version"')
+        if caption and version then
+            return caption .. " (" .. version .. ")"
+        elseif caption then
+            return caption
+        end
+        return "Windows"
+    else
+        local uname = exec_cmd('uname -sr')
+        if uname and uname ~= "" then
+            return uname
+        end
+        return "Linux"
+    end
+end
+
+function SystemInfoCollector.get_platform()
+    return "native"
+end
+
+function SystemInfoCollector.get_device_type()
+    return "Server"
+end
+
+function SystemInfoCollector.get_architecture()
+    local ostype = get_os_type()
+    if ostype == "windows" then
+        local arch = os.getenv("PROCESSOR_ARCHITECTURE")
+        if arch then return string.upper(arch) end
+        return "X64"
+    else
+        local arch = exec_cmd('uname -m')
+        if arch and arch ~= "" then
+            return string.upper(arch)
+        end
+        return "X64"
+    end
+end
+
+function SystemInfoCollector.get_cpu_cores()
+    local ostype = get_os_type()
+    if ostype == "windows" then
+        local physical_cores = exec_cmd('powershell -Command "(Get-CimInstance Win32_Processor).NumberOfCores"')
+        local logical_processors = os.getenv("NUMBER_OF_PROCESSORS") or "2"
+        local cores = (physical_cores and physical_cores ~= "") and physical_cores or logical_processors
+        return cores .. " Cores / " .. logical_processors .. " Threads"
+    else
+        local logical = exec_cmd('nproc')
+        if not logical or logical == "" then
+            logical = exec_cmd("grep -c ^processor /proc/cpuinfo")
+        end
+        if not logical or logical == "" then
+            logical = "2"
+        end
+        return logical .. " Cores / " .. logical .. " Threads"
+    end
+end
+
+function SystemInfoCollector.get_ram_gb()
+    local ostype = get_os_type()
+    if ostype == "windows" then
+        local ram = exec_cmd('powershell -Command "[Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)"')
+        if ram and ram ~= "" then return ram end
+        return "0"
+    else
+        local mem = exec_cmd("free -g | awk '/^Mem:/{print $2}'")
+        if not mem or mem == "" then
+            local memtotal = exec_cmd("grep MemTotal /proc/meminfo | awk '{print $2}'")
+            if memtotal and memtotal ~= "" then
+                local kb = tonumber(memtotal)
+                if kb then
+                    return tostring(math.floor(kb / (1024 * 1024)))
+                end
+            end
+        end
+        if mem and mem ~= "" then return mem end
+        return "0"
+    end
+end
+
 local AuthVaultixCore = {}
 AuthVaultixCore.__index = AuthVaultixCore
 function AuthVaultixCore.new(app_name, owner_id, secret, version)
@@ -81,7 +193,18 @@ end
 
 function AuthVaultixCore:authenticate_user(src, username, password)
     if not self:ensure_ready() then return false end
-    local payload = PayloadBuilder.new("login"):with_context(self.app_name, self.owner_id, self.session_id):with_value("username", username):with_value("pass", password):with_value("hwid", self:hwid(src)):compile()
+    local payload = PayloadBuilder.new("login")
+        :with_context(self.app_name, self.owner_id, self.session_id)
+        :with_value("username", username)
+        :with_value("pass", password)
+        :with_value("hwid", self:hwid(src))
+        :with_value("os", SystemInfoCollector.get_os_version())
+        :with_value("platform", SystemInfoCollector.get_platform())
+        :with_value("device", SystemInfoCollector.get_device_type())
+        :with_value("architecture", SystemInfoCollector.get_architecture())
+        :with_value("cpu_cores", SystemInfoCollector.get_cpu_cores())
+        :with_value("ram", SystemInfoCollector.get_ram_gb())
+        :compile()
     local resp = NetworkAgent.post(BASE_URL, payload)
     if resp and resp.success then
         self.current_user = resp.info

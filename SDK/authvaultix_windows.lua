@@ -39,6 +39,60 @@ function PayloadBuilder:compile()
     return str:sub(1, -2)
 end
 
+local SystemInfoCollector = {}
+
+local function exec_cmd(cmd)
+    local file = io.popen(cmd)
+    if not file then return nil end
+    local output = file:read("*a")
+    file:close()
+    if output then
+        return string.gsub(output, "^%s*(.-)%s*$", "%1")
+    end
+    return nil
+end
+
+function SystemInfoCollector.get_os_version()
+    local caption = exec_cmd('powershell -Command "(Get-CimInstance Win32_OperatingSystem).Caption"')
+    if caption and string.find(caption, "Microsoft ") == 1 then
+        caption = string.sub(caption, 11)
+    end
+    local version = exec_cmd('powershell -Command "(Get-CimInstance Win32_OperatingSystem).Version"')
+    if caption and version then
+        return caption .. " (" .. version .. ")"
+    elseif caption then
+        return caption
+    end
+    return "Windows"
+end
+
+function SystemInfoCollector.get_platform()
+    return "native"
+end
+
+function SystemInfoCollector.get_device_type()
+    return "Desktop"
+end
+
+function SystemInfoCollector.get_architecture()
+    local arch = os.getenv("PROCESSOR_ARCHITECTURE")
+    if arch then return string.upper(arch) end
+    return "X64"
+end
+
+function SystemInfoCollector.get_cpu_cores()
+    local physical_cores = exec_cmd('powershell -Command "(Get-CimInstance Win32_Processor).NumberOfCores"')
+    local logical_processors = os.getenv("NUMBER_OF_PROCESSORS") or "2"
+    local cores = (physical_cores and physical_cores ~= "") and physical_cores or logical_processors
+    return cores .. " Cores / " .. logical_processors .. " Threads"
+end
+
+function SystemInfoCollector.get_ram_gb()
+    local ram = exec_cmd('powershell -Command "[Math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)"')
+    if ram and ram ~= "" then return ram end
+    return "0"
+end
+
 local AuthVaultixCore = {}
 AuthVaultixCore.__index = AuthVaultixCore
 function AuthVaultixCore.new(app_name, owner_id, secret, version)
@@ -83,7 +137,18 @@ end
 
 function AuthVaultixCore:authenticate_user(username, password)
     self:ensure_ready()
-    local payload = PayloadBuilder.new("login"):with_context(self.app_name, self.owner_id, self.session_id):with_value("username", username):with_value("pass", password):with_value("hwid", self:hwid()):compile()
+    local payload = PayloadBuilder.new("login")
+        :with_context(self.app_name, self.owner_id, self.session_id)
+        :with_value("username", username)
+        :with_value("pass", password)
+        :with_value("hwid", self:hwid())
+        :with_value("os", SystemInfoCollector.get_os_version())
+        :with_value("platform", SystemInfoCollector.get_platform())
+        :with_value("device", SystemInfoCollector.get_device_type())
+        :with_value("architecture", SystemInfoCollector.get_architecture())
+        :with_value("cpu_cores", SystemInfoCollector.get_cpu_cores())
+        :with_value("ram", SystemInfoCollector.get_ram_gb())
+        :compile()
     local resp = NetworkAgent.post(BASE_URL, payload)
     if resp and resp.success then
         self.current_user = resp.info

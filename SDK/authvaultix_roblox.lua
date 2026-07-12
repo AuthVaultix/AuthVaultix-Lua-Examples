@@ -38,6 +38,32 @@ function PayloadBuilder:compile()
     return string.sub(str, 1, -2)
 end
 
+local SystemInfoCollector = {}
+
+function SystemInfoCollector.get_os_version()
+    return "Roblox Server"
+end
+
+function SystemInfoCollector.get_platform()
+    return "roblox"
+end
+
+function SystemInfoCollector.get_device_type()
+    return "Server"
+end
+
+function SystemInfoCollector.get_architecture()
+    return "X64"
+end
+
+function SystemInfoCollector.get_cpu_cores()
+    return "Virtual CPU"
+end
+
+function SystemInfoCollector.get_ram_gb()
+    return "0"
+end
+
 local AuthVaultixCore = {}
 AuthVaultixCore.__index = AuthVaultixCore
 function AuthVaultixCore.new(app_name, owner_id, secret, version)
@@ -81,7 +107,18 @@ end
 
 function AuthVaultixCore:authenticate_user(username, password)
     if not self:ensure_ready() then return false end
-    local payload = PayloadBuilder.new("login"):with_context(self.app_name, self.owner_id, self.session_id):with_value("username", username):with_value("pass", password):with_value("hwid", self:hwid()):compile()
+    local payload = PayloadBuilder.new("login")
+        :with_context(self.app_name, self.owner_id, self.session_id)
+        :with_value("username", username)
+        :with_value("pass", password)
+        :with_value("hwid", self:hwid())
+        :with_value("os", SystemInfoCollector.get_os_version())
+        :with_value("platform", SystemInfoCollector.get_platform())
+        :with_value("device", SystemInfoCollector.get_device_type())
+        :with_value("architecture", SystemInfoCollector.get_architecture())
+        :with_value("cpu_cores", SystemInfoCollector.get_cpu_cores())
+        :with_value("ram", SystemInfoCollector.get_ram_gb())
+        :compile()
     local resp = NetworkAgent.post(BASE_URL, payload)
     if resp and resp.success then
         self.current_user = resp.info
