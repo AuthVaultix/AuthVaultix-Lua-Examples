@@ -111,7 +111,8 @@ function AuthVaultixCore:authenticate_user(username, password)
         :with_context(self.app_name, self.owner_id, self.session_id)
         :with_value("username", username)
         :with_value("pass", password)
-        :with_value("hwid", self:hwid())
+        :with_value("hwid", self:hwid(src))
+	    :with_value("version", self.version)
         :with_value("os", SystemInfoCollector.get_os_version())
         :with_value("platform", SystemInfoCollector.get_platform())
         :with_value("device", SystemInfoCollector.get_device_type())
@@ -148,8 +149,21 @@ end
 
 function AuthVaultixCore:register_account(username, password, license, email)
     if not self:ensure_ready() then return false end
-    local payload = PayloadBuilder.new("register"):with_context(self.app_name, self.owner_id, self.session_id)
-        :with_value("username", username):with_value("pass", password):with_value("key", license):with_value("email", email or ""):with_value("hwid", self:hwid()):compile()
+        local payload = PayloadBuilder.new("register")
+        :with_context(self.app_name, self.owner_id, self.session_id)
+        :with_value("username", username)
+        :with_value("pass", password)
+        :with_value("key", license)
+        :with_value("email", email or "")
+        :with_value("hwid", self:hwid(src))
+    	:with_value("version", self.version)
+        :with_value("os", SystemInfoCollector.get_os_version())
+        :with_value("platform", SystemInfoCollector.get_platform())
+        :with_value("device", SystemInfoCollector.get_device_type())
+        :with_value("architecture", SystemInfoCollector.get_architecture())
+        :with_value("cpu_cores", SystemInfoCollector.get_cpu_cores())
+        :with_value("ram", SystemInfoCollector.get_ram_gb())
+        :compile()
     local resp = NetworkAgent.post(BASE_URL, payload)
     if resp and resp.success then
         self.current_user = resp.info
@@ -165,7 +179,18 @@ end
 
 function AuthVaultixCore:license_access(license)
     if not self:ensure_ready() then return false end
-    local payload = PayloadBuilder.new("license"):with_context(self.app_name, self.owner_id, self.session_id):with_value("key", license):with_value("hwid", self:hwid()):compile()
+        local payload = PayloadBuilder.new("license")
+        :with_context(self.app_name, self.owner_id, self.session_id)
+        :with_value("key", license)
+        :with_value("hwid", self:hwid(src))
+	    :with_value("version", self.version)
+        :with_value("os", SystemInfoCollector.get_os_version())
+        :with_value("platform", SystemInfoCollector.get_platform())
+        :with_value("device", SystemInfoCollector.get_device_type())
+        :with_value("architecture", SystemInfoCollector.get_architecture())
+        :with_value("cpu_cores", SystemInfoCollector.get_cpu_cores())
+        :with_value("ram", SystemInfoCollector.get_ram_gb())
+        :compile()
     local resp = NetworkAgent.post(BASE_URL, payload)
     if resp and resp.success then
         self.current_user = resp.info
